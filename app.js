@@ -4,6 +4,7 @@ var fs = require( 'fs' );
 var bodyParser = require( 'body-parser' );
 var crypto = require( 'crypto' );
 var jwt = require( 'jsonwebtoken' );
+var request = require( 'request' );
 var app = express();
 
 var settings = require( './settings' );
@@ -233,6 +234,42 @@ app.post( '/decrypt', function( req, res ){
   }else{
     res.status( 400 );
     res.write( JSON.stringify( { status: false, message: 'no body/key found in request body.' }, 2, null ) );
+    res.end();
+  }
+});
+
+app.get( '/sync', function( req, res ){
+  res.contentType( 'application/json; charset=utf-8' );
+  var name = req.query.name;
+  if( name ){
+    var url = settings.master_url + 'blocks/' + name;
+    request( url, ( err0, res0, body0 ) => {
+      if( err0 ){
+        res.status( 400 );
+        res.write( JSON.stringify( { status: false, error: err0 }, 2, null ) );
+        res.end();
+      }else{
+        var result = JSON.parse( body0 );
+        if( result.status ){
+          var blocks = result.blocks;
+          blocks.forEach( function( block ){
+            var dir = settings.dbs_folder + '/' + name + '/' + block._id;
+            if( !fs.existsSync( dir ) ){
+              saveBlock( name, block );
+            }
+          });
+          res.write( JSON.stringify( { status: true }, 2, null ) );
+          res.end();
+        }else{
+          res.status( 400 );
+          res.write( JSON.stringify( { status: false, error: result.message }, 2, null ) );
+          res.end();
+        }
+      }
+    });
+  }else{
+    res.status( 400 );
+    res.write( JSON.stringify( { status: false, message: 'parameter name is missing to execute this API.' }, 2, null ) );
     res.end();
   }
 });

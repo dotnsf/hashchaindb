@@ -195,6 +195,25 @@ paths:
           description: 成功
         '400':
           description: エラー
+  /sync:
+    get:
+      tags:
+        - etc
+      summary: マスターに対する同期処理
+      description: マスターに対する同期処理
+      produces:
+        - application/json
+      parameters:
+        - name: name
+          type: string
+          in: query
+          description: データベース名
+          required: true
+      responses:
+        '200':
+          description: 成功
+        '400':
+          description: エラー
 definitions:
   BlockRequest:
     type: object
