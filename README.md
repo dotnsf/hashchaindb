@@ -11,6 +11,11 @@ Simple datastore system, whick has restricted features only for [HashChain Solo]
 
 - You can edit **./settings.js** : **exports.master_url** value with your master server, when you **GET /sync/:name** API.
 
+## Docker
+
+- You can use [Docker image](https://hub.docker.com/repository/docker/dotnsf/hashchaindb):
+
+  - https://hub.docker.com/repository/docker/dotnsf/hashchaindb
 
 ## Licensing
 
