@@ -1,0 +1,225 @@
+swagger: '2.0'
+info:
+  description: HashChainDB API ドキュメント
+  version: 0.0.1
+  title: HashChainDB REST APIs
+host: localhost:3000
+basePath: /
+tags:
+  - name: db
+    description: DB related API
+  - name: block
+    description: Block related API
+  - name: etc
+    description: Other API
+schemes:
+  - http
+  - https
+paths:
+  /dbs:
+    get:
+      tags:
+        - db
+      summary: データベース一覧
+      description: データベース一覧
+      produces:
+        - application/json
+      parameters:
+        - name: limit
+          type: integer
+          in: query
+          description: 取りだす件数（無指定時は全件）
+        - name: offset
+          type: integer
+          in: query
+          description: 取りだす際のオフセット（無指定時は0）
+      responses:
+        '200':
+          description: 成功
+        '400':
+          description: エラー
+  /db/{_name}:
+    post:
+      tags:
+        - db
+      summary: データベースを作成する
+      description: データベースを作成する
+      parameters:
+        - name: _name
+          type: string
+          in: path
+          description: データベース名
+          required: true
+      responses:
+        '200':
+          description: 成功
+        '400':
+          description: エラー
+    delete:
+      tags:
+        - db
+      summary: 指定した１つのデータベースを削除する
+      description: （設定で許可されている場合、）\{_name\} で指定した名前のデータベースを一件削除する
+      parameters:
+        - name: _name
+          type: string
+          in: path
+          description: データベース名
+          required: true
+      responses:
+        '200':
+          description: 成功
+        '400':
+          description: エラー
+  /block/{_name}/{_id}:
+    get:
+      tags:
+        - block
+      summary: 指定した１つのブロックを取得する
+      description: \{_id\} で指定した id のブロックを一件取得する
+      parameters:
+        - name: _name
+          type: string
+          in: path
+          description: データベース名
+          required: true
+        - name: _id
+          type: string
+          in: path
+          description: id
+          required: true
+      responses:
+        '200':
+          description: 成功
+        '400':
+          description: エラー
+  /block/{_name}:
+    post:
+      tags:
+        - block
+      summary: ブロックを作成する
+      description: ブロックを作成する
+      parameters:
+        - name: _name
+          type: string
+          in: path
+          description: データベース名
+          required: true
+        - name: body
+          in: body
+          schema:
+            $ref: '#/definitions/BlockRequest'
+      responses:
+        '200':
+          description: 成功
+        '400':
+          description: エラー
+  /blocks/{_name}:
+    get:
+      tags:
+        - block
+      summary: ブロックの複数件取得
+      description: 格納されているブロックを複数件取得する
+      produces:
+        - application/json
+      parameters:
+        - name: _name
+          type: string
+          in: path
+          description: データベース名
+          required: true
+        - name: limit
+          type: integer
+          in: query
+          description: 取りだす件数（無指定時は全件）
+        - name: offset
+          type: integer
+          in: query
+          description: 取りだす際のオフセット（無指定時は0）
+      responses:
+        '200':
+          description: 成功
+        '400':
+          description: エラー
+  /validate:
+    post:
+      tags:
+        - etc
+      summary: ブロックの正当性確認
+      description: ブロックが改ざんされていないことを確認する
+      produces:
+        - application/json
+      parameters:
+        - name: body
+          in: body
+          schema:
+            $ref: '#/definitions/BlockRequest'
+      responses:
+        '200':
+          description: 成功
+        '400':
+          description: エラー
+  /encrypt:
+    post:
+      tags:
+        - etc
+      summary: ブロックの暗号化
+      description: ブロックの暗号化
+      produces:
+        - application/json
+      parameters:
+        - name: body
+          in: body
+          schema:
+            $ref: '#/definitions/EncryptRequest'
+      responses:
+        '200':
+          description: 成功
+        '400':
+          description: エラー
+  /decrypt:
+    post:
+      tags:
+        - etc
+      summary: ブロックの暗号化
+      description: ブロックの暗号化
+      produces:
+        - application/json
+      parameters:
+        - name: body
+          in: body
+          schema:
+            $ref: '#/definitions/DecryptRequest'
+      responses:
+        '200':
+          description: 成功
+        '400':
+          description: エラー
+definitions:
+  BlockRequest:
+    type: object
+    properties:
+      name:
+        type: string
+        description: 名前
+      age:
+        type: integer
+        description: 年齢
+  EncryptRequest:
+    type: object
+    properties:
+      key:
+        type: string
+        description: 鍵
+      body:
+        type: object
+        description: 暗号化するオブジェクト
+  DecryptRequest:
+    type: object
+    properties:
+      key:
+        type: string
+        description: 鍵
+      body:
+        type: string
+        description: 暗号化された文字列

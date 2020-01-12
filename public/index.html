@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>hashchain db</title>
+<meta charset="utf8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+<meta name="apple-mobile-web-app-title" content="HashChain DB"/>
+
+<script src="//code.jquery.com/jquery-2.2.4.min.js"></script>
+<link href="//maxcdn.bootstrapcdn.com/bootstrap/4.3.0/css/bootstrap.min.css" rel="stylesheet"/>
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/4.3.0/js/bootstrap.min.js"></script>
+<script src="/js/hashchaindb.js?name=mydb"></script>
+<script>
+$(function(){
+  $('#ledger_table_tbody').html( '' );
+  createDb().then( function( result ){
+    getLedger().then( function( ledger ){
+      for( var i = ledger.length - 1; i >= 0; i -- ){
+        var block = ledger[i];
+        var tr = '<tr>'
+          + '<td>' + str4display( block._id ) + '<br/>' + str4display( block._prev_id ) + '</td>'
+          + '<td><pre>' + JSON.stringify( block._body, null, 2 ) + '</pre></td>'
+          + '<td>' + block._nonce + '</td>'
+          + '<td>' + timestamp2datetime( block._timestamp ) + '</td>'
+          + '</tr>';
+        $('#ledger_table_tbody').append( tr );
+      }
+      var tr = '<tr>'
+        + '<td>-</td>'
+        + '<td><textarea id="edit_body" class="form-control">{}</textarea>' + '</td>'
+        + '<td>-</td>'
+        + '<td><input type="button" class="btn btn-primary btn-xs" value="post" onClick="postNewData();"/></td>'
+        + '</tr>';
+      $('#ledger_table_tbody').append( tr );
+    }).catch( function( err ){
+    });
+  }).catch( function( err ){
+  });
+});
+
+function postNewData(){
+  var json = $('#edit_body').val();
+
+  var body = JSON.parse( json );
+  postBody( body ).then( function( result ){
+    location.href = '/';
+  }).catch( function( err ){
+    console.log( err );
+  });
+}
+</script>
+</head>
+<body>
+
+<div class="container">
+<table id="ledger_table" class="table table-bordered">
+  <thead>
+    <tr><th>id<br/>prev_id</th><th>body</th><th>nonce</th><th>timestamp</th></tr>
+  </thead>
+  <tbody id="ledger_table_tbody">
+  </tbody>
+</table>
+</div>
+
+</body>
+</html>
