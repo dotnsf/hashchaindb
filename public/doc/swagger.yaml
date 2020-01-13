@@ -214,6 +214,25 @@ paths:
           description: 成功
         '400':
           description: エラー
+  /reorg:
+    get:
+      tags:
+        - etc
+      summary: リオルグ処理
+      description: リオルグ処理
+      produces:
+        - application/json
+      parameters:
+        - name: name
+          type: string
+          in: query
+          description: データベース名
+          required: true
+      responses:
+        '200':
+          description: 成功
+        '400':
+          description: エラー
 definitions:
   BlockRequest:
     type: object

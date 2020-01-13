@@ -280,83 +280,70 @@ app.get( '/reorg', function( req, res ){
   res.status( 400 );
   res.write( JSON.stringify( { status: false, message: 'not implemented yet.' }, 2, null ) );
   res.end();
-  /*
-  if( db ){
-    db.view( 'library', 'bytimestamp', {}, function( err, body ){
-      if( err ){
-        res.status( 400 );
-        res.write( JSON.stringify( { status: false, message: err }, 2, null ) );
-        res.end();
+
+  var name = req.params.name;
+  if( name ){
+    var blocks = getBlocks( name );
+
+    //. 競合ブロックを探す
+    var conflict = false;
+    var prev_blocks = {};
+    var conflict_prev_ids = [];
+    blocks.forEach( function( block ){
+      var _id = block['_id'];
+      var _prev_id = block['_prev_id'];
+      var _timestamp = block['_timestamp'];
+      var prev_block = JSON.parse(JSON.stringify(block));
+      if( _prev_id == null ){ _prev_id = '0'; }
+      if( !prev_blocks[_prev_id] ){
+        prev_blocks[_prev_id] = [ prev_block ];
       }else{
-        //. 競合ノードを探す
-        var conflict = false;
-        var prev_docs = {};
-        var conflict_prev_hashes = [];
-        body.rows.forEach( function( doc ){
-          var _doc = JSON.parse(JSON.stringify(doc.value));
-          var _id = _doc['_id'];
-          var _hash = _doc['hashchainsolo_system']['hash'];
-          var _prev_hash = _doc['hashchainsolo_system']['prev_hash'];
-          var _timestamp = _doc['hashchainsolo_system']['timestamp'];
-          //var prev_doc = { id: _id, hash: _hash, timestamp: _timestamp };
-          var prev_doc = _doc;
-          if( _prev_hash == null ){ _prev_hash = '0'; }
-          if( !prev_docs[_prev_hash] ){
-            prev_docs[_prev_hash] = [ prev_doc ];
-          }else{
-            //. conclict!
-            conflict_prev_hashes.push( _prev_hash );
-            //prev_docs[_prev_hash].push( [ prev_doc ] );
-            prev_docs[_prev_hash].push( prev_doc );
+        //. conclict!
+        conflict_prev_ids.push( _prev_id );
+        prev_blocks[_prev_id].push( prev_block );
+      }
+    });
+
+    if( conflict_prev_hashes && conflict_prev_hashes.length > 0 ){
+      //. 競合ブロック発見！
+      conflict_prev_ids.forEach( function( _prev_id ){
+        var conflict_blocks = prev_blocks[_prev_id];
+
+        //. 競合ブロック内で最大の timestamp を探す
+        var max_timestamp = 0;
+        conflict_blocks.forEach( function( block ){
+          if( max_timestamp < block._timestamp ){
+            max_timestamp = block._timestamp;
           }
         });
 
-        if( conflict_prev_hashes && conflict_prev_hashes.length > 0 ){
-          //. 競合ノード発見！
-          conflict_prev_hashes.forEach( function( prev_hash ){
-            var conflict_docs = prev_docs[prev_hash];
-
-            //. 最大の timestamp を探す
-            var max_timestamp = 0;
-            conflict_docs.forEach( function( doc ){
-              if( max_timestamp < doc.hashchainsolo_system.timestamp ){
-                max_timestamp = doc.hashchainsolo_system.timestamp;
-              }
-            });
-
-            if( max_timestamp > 0 ){
-              console.log( 'max_timestamp=' + max_timestamp );
-              //. チェーンから外すブロックを処理
-              conflict_docs.forEach( function( doc ){
-                console.log( doc );
-                if( doc.hashchainsolo_system.timestamp < max_timestamp ){
-                  //. このノードと、このノードの子孫をすべて処理
-
-                  //. 「処理」をどうする？　削除？prev_hashのみ処理済みのものに書き換える？
-                  //deleteTree( doc, prev_docs );
-                  reorgTree( doc, prev_docs );
-                }
-              });
+        if( max_timestamp > 0 ){
+          console.log( 'max_timestamp=' + max_timestamp );
+          //. チェーンから外すブロックを処理
+          conflict_blocks.forEach( function( block ){
+            console.log( block );
+            if( block._timestamp < max_timestamp ){
+              //. このブロックと、このブロックの子孫をすべて処理
+              reorgTree( name, block, prev_blocks );
             }
           });
-
-          var result = { status: true, result: "Conflicts processing.." };
-          res.write( JSON.stringify( result, 2, null ) );
-          res.end();
-        }else{
-          //. 競合ノードなし
-          var result = { status: true, result: "No conflict found." };
-          res.write( JSON.stringify( result, 2, null ) );
-          res.end();
         }
-      }
-    });
+      });
+
+      var result = { status: true, result: "Conflicts processing.." };
+      res.write( JSON.stringify( result, 2, null ) );
+      res.end();
+    }else{
+      //. 競合ブロックなし
+      var result = { status: true, result: "No conflict found." };
+      res.write( JSON.stringify( result, 2, null ) );
+      res.end();
+    }
   }else{
     res.status( 400 );
-    res.write( JSON.stringify( { status: false, message: 'hashchainsolo is failed to initialize.' }, 2, null ) );
+    res.write( JSON.stringify( { status: false, message: 'parameter name is missing to execute this API.' }, 2, null ) );
     res.end();
   }
-  */
 });
 
 
@@ -622,6 +609,20 @@ function saveBlock( name, block ){
   return r;
 }
 
+function deleteBlock( name, _id ){
+  var r = false;
+  var db_dir = settings.dbs_folder + '/' + name;
+  if( fs.existsSync( db_dir ) ){
+    var block_dir = db_dir + '/' + _id;
+    if( fs.existsSync( block_dir ) ){
+      fs.unlinkSync( block_dir );
+      r = true;
+    }
+  }
+
+  return r;
+}
+
 function getBlock( name, id ){
   var block = null;
   if( name ){
@@ -637,6 +638,60 @@ function getBlock( name, id ){
   }
 
   return block;
+}
+
+function reorgTree( name, pblock, prev_blocks ){
+  //. 該当ブロックをリオルグ
+  var _id = pblock._id;
+  reorgBlock( name, pblock );
+
+  //. 該当ブロックの子孫が存在していたらリオルグ
+  var blocks = prev_blocks[_id];
+  if( blocks ){
+    blocks.forEach( function( block ){
+      reorgTree( name, block, prev_blocks );
+    });
+  }
+}
+
+function reorgBlock( name, block ){
+  console.log( "reorg block: " + block._id );
+  console.log( block );
+  var _id = block['_id'];
+  delete block['_id'];
+
+  //. 自分以外で最後に追加されたブロックを特定する
+  var blocks = getBlocks( name );
+  var prev_block = null;
+  if( blocks.length > 0 ){
+    blocks.sort( compareByTimestampRev );
+    prev_block = blocks[0];
+    if( prev_block._id == _id ){ prev_block = blocks[1]; }
+  }
+
+  if( prev_block && prev_block._id ){
+    //. 特定したブロックの次につなぎ直す
+    block._timestamp = ( new Date() ).getTime();
+    block._prev_id = prev_block._id;
+
+    var nonce = 0;
+    var nonce_hash = null;
+    do{
+      nonce ++;
+      block._nonce = nonce;
+
+      var hash = crypto.createHash( 'sha512' );
+      hash.update( JSON.stringify( block ) );
+      nonce_hash = hash.digest( 'hex' );
+    }while( settings.zerodigit > 0 && countTopZero( nonce_hash ) < settings.zerodigit )
+
+    block._id = nonce_hash;
+
+    //. 古いブロックを消してから新しいブロックを保存する
+    if( deleteBlock( name, _id ) ){
+      saveBlock( name, block );
+    }
+  }
 }
 
 
