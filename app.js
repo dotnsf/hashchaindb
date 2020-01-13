@@ -100,29 +100,34 @@ app.post( '/block/:name', function( req, res ){
     };
 
     //. 直前のブロック（の _id ）を見つける
-    var _prev_block = getLastBlock( name );
-    if( _prev_block ){ _block._prev_id = _prev_block._id; }
+    getLastBlock( name ).then( function( _prev_block ){
+      if( _prev_block ){ _block._prev_id = _prev_block._id; }
 
-    var _id = null;
-    do{
-      _nonce ++;
-      _block._nonce = _nonce;
+      var _id = null;
+      do{
+        _nonce ++;
+        _block._nonce = _nonce;
 
-      var hash = crypto.createHash( 'sha512' );
-      hash.update( JSON.stringify( _block ) );
-      _id = hash.digest( 'hex' );
-    }while( settings.zerodigit > 0 && countTopZero( _id ) < settings.zerodigit )
+        var hash = crypto.createHash( 'sha512' );
+        hash.update( JSON.stringify( _block ) );
+        _id = hash.digest( 'hex' );
+      }while( settings.zerodigit > 0 && countTopZero( _id ) < settings.zerodigit )
 
-    _block._id = _id;
+      _block._id = _id;
 
-    if( saveBlock( name, _block ) ){
-      res.write( JSON.stringify( { status: true, _id: _block._id }, 2, null ) );
-      res.end();
-    }else{
+      saveBlock( name, _block ).then( function(){
+        res.write( JSON.stringify( { status: true, _id: _block._id }, 2, null ) );
+        res.end();
+      }).catch( function( err ){
+        res.status( 400 );
+        res.write( JSON.stringify( { status: false, message: 'creating block failed.' }, 2, null ) );
+        res.end();
+      });
+    }).catch( function( err ){
       res.status( 400 );
-      res.write( JSON.stringify( { status: false, message: 'creating block failed.' }, 2, null ) );
+      res.write( JSON.stringify( { status: false, message: '' + err }, 2, null ) );
       res.end();
-    }
+    });
   }else{
     res.status( 400 );
     res.write( JSON.stringify( { status: false, message: 'parameter name is missing to execute this API.' }, 2, null ) );
@@ -136,9 +141,15 @@ app.get( '/block/:name/:id', function( req, res ){
   var id = req.params.id;
   if( name ){
     if( id ){
-      var block = getBlock( name, id );
-      res.write( JSON.stringify( { status: true, block: block }, 2, null ) );
-      res.end();
+      //var block = getBlock( name, id );
+      getBlock( name, id ).then( function( block ){
+        res.write( JSON.stringify( { status: true, block: block }, 2, null ) );
+        res.end();
+      }).catch( function( err ){
+        res.status( 400 );
+        res.write( JSON.stringify( { status: false, message: '' + err }, 2, null ) );
+        res.end();
+      });
     }else{
       res.status( 400 );
       res.write( JSON.stringify( { status: false, message: 'parameter id is missing to execute this API.' }, 2, null ) );
@@ -155,9 +166,15 @@ app.get( '/blocks/:name', function( req, res ){
   res.contentType( 'application/json; charset=utf-8' );
   var name = req.params.name;
   if( name ){
-    var blocks = getBlocks( name );
-    res.write( JSON.stringify( { status: true, blocks: blocks }, 2, null ) );
-    res.end();
+    //var blocks = getBlocks( name );
+    getBlocks( name ).then( function( blocks ){
+      res.write( JSON.stringify( { status: true, blocks: blocks }, 2, null ) );
+      res.end();
+    }).catch( function( err ){
+      res.status( 400 );
+      res.write( JSON.stringify( { status: false, message: '' + err }, 2, null ) );
+      res.end();
+    });
   }else{
     res.status( 400 );
     res.write( JSON.stringify( { status: false, message: 'parameter name is missing to execute this API.' }, 2, null ) );
@@ -201,12 +218,18 @@ app.post( '/validate', function( req, res ){
 app.post( '/encrypt', function( req, res ){
   res.contentType( 'application/json; charset=utf-8' );
   if( req.body && req.body.body && req.body.key ){
+    console.log( req.body );
     var key = req.body.key;
     var body = JSON.parse( JSON.stringify( req.body.body ) );
-    var encbody = jwt.sign( body, key, {} );
-
-    res.write( JSON.stringify( { status: true, body: encbody }, 2, null ) );
-    res.end();
+    //var encbody = jwt.sign( body, key, {} );
+    hc_encrypt( body, key ).then( function( encbody ){
+      res.write( JSON.stringify( { status: true, body: encbody }, 2, null ) );
+      res.end();
+    }).catch( function( err ){
+      res.status( 400 );
+      res.write( JSON.stringify( { status: false, message: '' + err }, 2, null ) );
+      res.end();
+    });
   }else{
     res.status( 400 );
     res.write( JSON.stringify( { status: false, message: 'no body/key found in request body.' }, 2, null ) );
@@ -220,16 +243,13 @@ app.post( '/decrypt', function( req, res ){
     var key = req.body.key;
     var body = req.body.body;
 
-    jwt.verify( body, key, function( err, decrypted ){
-      if( err ){
-        res.status( 400 );
-        res.write( JSON.stringify( { status: false, message: 'Invalid signature' }, 2, null ) );
-        res.end();
-      }else{
-        if( decrypted['iat'] ){ delete decrypted['iat']; }
-        res.write( JSON.stringify( { status: true, body: decrypted }, 2, null ) );
-        res.end();
-      }
+    hc_decrypt( body, key ).then( function( decbody ){
+      res.write( JSON.stringify( { status: true, body: decbody }, 2, null ) );
+      res.end();
+    }).catch( function( err ){
+      res.status( 400 );
+      res.write( JSON.stringify( { status: false, message: '' + err }, 2, null ) );
+      res.end();
     });
   }else{
     res.status( 400 );
@@ -238,6 +258,8 @@ app.post( '/decrypt', function( req, res ){
   }
 });
 
+//. reorg によって不要なブロックが生じている可能性があるが、現在は無視している・・・
+//. 不要と判断されるブロックは削除すべき
 app.get( '/sync', function( req, res ){
   res.contentType( 'application/json; charset=utf-8' );
   var name = req.query.name;
@@ -284,61 +306,66 @@ app.get( '/reorg', function( req, res ){
   var name = req.params.name;
   if( name ){
     var blocks = getBlocks( name );
-
-    //. 競合ブロックを探す
-    var conflict = false;
-    var prev_blocks = {};
-    var conflict_prev_ids = [];
-    blocks.forEach( function( block ){
-      var _id = block['_id'];
-      var _prev_id = block['_prev_id'];
-      var _timestamp = block['_timestamp'];
-      var prev_block = JSON.parse(JSON.stringify(block));
-      if( _prev_id == null ){ _prev_id = '0'; }
-      if( !prev_blocks[_prev_id] ){
-        prev_blocks[_prev_id] = [ prev_block ];
-      }else{
-        //. conclict!
-        conflict_prev_ids.push( _prev_id );
-        prev_blocks[_prev_id].push( prev_block );
-      }
-    });
-
-    if( conflict_prev_hashes && conflict_prev_hashes.length > 0 ){
-      //. 競合ブロック発見！
-      conflict_prev_ids.forEach( function( _prev_id ){
-        var conflict_blocks = prev_blocks[_prev_id];
-
-        //. 競合ブロック内で最大の timestamp を探す
-        var max_timestamp = 0;
-        conflict_blocks.forEach( function( block ){
-          if( max_timestamp < block._timestamp ){
-            max_timestamp = block._timestamp;
-          }
-        });
-
-        if( max_timestamp > 0 ){
-          console.log( 'max_timestamp=' + max_timestamp );
-          //. チェーンから外すブロックを処理
-          conflict_blocks.forEach( function( block ){
-            console.log( block );
-            if( block._timestamp < max_timestamp ){
-              //. このブロックと、このブロックの子孫をすべて処理
-              reorgTree( name, block, prev_blocks );
-            }
-          });
+    getBlocks( name ).then( function( blocks ){
+      //. 競合ブロックを探す
+      var conflict = false;
+      var prev_blocks = {};
+      var conflict_prev_ids = [];
+      blocks.forEach( function( block ){
+        var _id = block['_id'];
+        var _prev_id = block['_prev_id'];
+        var _timestamp = block['_timestamp'];
+        var prev_block = JSON.parse(JSON.stringify(block));
+        if( _prev_id == null ){ _prev_id = '0'; }
+        if( !prev_blocks[_prev_id] ){
+          prev_blocks[_prev_id] = [ prev_block ];
+        }else{
+          //. conclict!
+          conflict_prev_ids.push( _prev_id );
+          prev_blocks[_prev_id].push( prev_block );
         }
       });
 
-      var result = { status: true, result: "Conflicts processing.." };
-      res.write( JSON.stringify( result, 2, null ) );
+      if( conflict_prev_hashes && conflict_prev_hashes.length > 0 ){
+        //. 競合ブロック発見！
+        conflict_prev_ids.forEach( function( _prev_id ){
+          var conflict_blocks = prev_blocks[_prev_id];
+
+          //. 競合ブロック内で最大の timestamp を探す
+          var max_timestamp = 0;
+          conflict_blocks.forEach( function( block ){
+            if( max_timestamp < block._timestamp ){
+              max_timestamp = block._timestamp;
+            }
+          });
+
+          if( max_timestamp > 0 ){
+            console.log( 'max_timestamp=' + max_timestamp );
+            //. チェーンから外すブロックを処理
+            conflict_blocks.forEach( function( block ){
+              if( block._timestamp < max_timestamp ){
+                //. このブロックと、このブロックの子孫をすべて処理
+                reorgTree( name, block, prev_blocks );  //. await が使えない。。
+              }
+            });
+          }
+        });
+
+        var result = { status: true, result: "Conflicts processing.." };
+        res.write( JSON.stringify( result, 2, null ) );
+        res.end();
+      }else{
+        //. 競合ブロックなし
+        var result = { status: true, result: "No conflict found." };
+        res.write( JSON.stringify( result, 2, null ) );
+        res.end();
+      }
+    }).catch( function( err ){
+      res.status( 400 );
+      res.write( JSON.stringify( { status: false, message: '' + err }, 2, null ) );
       res.end();
-    }else{
-      //. 競合ブロックなし
-      var result = { status: true, result: "No conflict found." };
-      res.write( JSON.stringify( result, 2, null ) );
-      res.end();
-    }
+    });
+
   }else{
     res.status( 400 );
     res.write( JSON.stringify( { status: false, message: 'parameter name is missing to execute this API.' }, 2, null ) );
@@ -405,15 +432,19 @@ app.get( '/js/hashchaindb.js', function( req, res ){
     + "\n"
     + "function encryptBody( body, key ){\n"
     + "  return new Promise( ( resolve, reject ) => {\n"
+    + "console.log( 'body = ' + body );\n"
     + "    $.ajax({\n"
     + "      type: 'POST',\n"
     + "      url: '/encrypt',\n"
     + "      data: { key: key, body: body },\n"
     + "      success: function( result ){\n"
+    + "console.log( result );\n"
     + "        resolve( result );\n"
     + "      },\n"
-    + "      error: function( e ){\n"
-    + "        reject( e );\n"
+    + "      error: function( e0, e1, e2 ){\n"
+    + "console.log( e1 );\n"
+    + "console.log( e2 );\n"
+    + "        reject( e1 );\n"
     + "      }\n"
     + "    });\n"
     + "  });\n"
@@ -545,32 +576,40 @@ function countTopZero( str ){
   return cnt;
 }
 
-function validateDocument( doc ){
-  var r = true;
+async function hc_encrypt( body, key ){
+  return await async_encrypt( body, key );
+}
+function async_encrypt( body, key ){
+  return new Promise( ( resolve, reject ) => {
+    if( !key ){ key = settings.superSecret; }
+    var encbody = jwt.sign( body, key, {} );  //. body は string or object
 
-  if( typeof doc !== 'object' ){
-    r = false;
-  }else{
-    /*
-    if( 'id' in doc ){
-      r = false;
-    }
-    if( 'rev' in doc ){
-      r = false;
-    }
-    */
-    if( 'hashchainsolo_system' in doc ){
-      r = false;
-    }
-  }
-
-  return r;
+    resolve( encbody );
+  });
 }
 
-function getLastBlock( name ){
+async function hc_decrypt( body, key ){
+  return await async_decrypt( body, key );
+}
+function async_decrypt( body, key ){
+  return new Promise( ( resolve, reject ) => {
+    if( !key ){ key = settings.superSecret; }
+
+    jwt.verify( body, key, function( err, decbody ){
+      if( err ){
+        reject( err );
+      }else{
+        if( typeof decbody == 'object' && decbody['iat'] ){ delete decbody['iat']; }
+        resolve( decbody );
+      }
+    });
+  });
+}
+
+async function getLastBlock( name ){
   var block = null;
   if( name ){
-    var blocks = getBlocks( name );
+    var blocks = await getBlocks( name );
     if( blocks.length > 0 ){
       blocks.sort( compareByTimestampRev );
       block = blocks[0];
@@ -581,7 +620,7 @@ function getLastBlock( name ){
   return block;
 }
 
-function getBlocks( name ){
+async function getBlocks( name ){
   var blocks = null
   if( name ){
     blocks = [];
@@ -589,7 +628,9 @@ function getBlocks( name ){
     var files = fs.readdirSync( db_dir );
     for( var file in files ){
       var json = fs.readFileSync( db_dir + '/' + files[file], 'utf-8' );
-      blocks.push( JSON.parse( json ) );
+      var decbody = await hc_decrypt( json );
+      if( typeof decbody == 'string' ){ decbody = JSON.parse( decbody ); }
+      blocks.push( decbody );
     }
   }else{
   }
@@ -597,19 +638,21 @@ function getBlocks( name ){
   return blocks;
 }
 
-function saveBlock( name, block ){
+async function saveBlock( name, block ){
   var r = false;
   var db_dir = settings.dbs_folder + '/' + name;
   if( fs.existsSync( db_dir ) ){
     var json = JSON.stringify( block, null, 2 );
-    fs.writeFileSync( db_dir + '/' + block._id, json, 'utf-8' );
+    var encbody = await hc_encrypt( json );
+    fs.writeFileSync( db_dir + '/' + block._id, encbody, 'utf-8' );
     r = true;
+  }else{
   }
 
   return r;
 }
 
-function deleteBlock( name, _id ){
+async function deleteBlock( name, _id ){
   var r = false;
   var db_dir = settings.dbs_folder + '/' + name;
   if( fs.existsSync( db_dir ) ){
@@ -623,10 +666,10 @@ function deleteBlock( name, _id ){
   return r;
 }
 
-function getBlock( name, id ){
+async function getBlock( name, id ){
   var block = null;
   if( name ){
-    var blocks = getBlocks( name );
+    var blocks = await getBlocks( name );
     var b = false;
     for( var i = 0; i < blocks.length && !b; i ++ ){
       if( blocks[i]._id == id ){
@@ -640,10 +683,10 @@ function getBlock( name, id ){
   return block;
 }
 
-function reorgTree( name, pblock, prev_blocks ){
+async function reorgTree( name, pblock, prev_blocks ){
   //. 該当ブロックをリオルグ
   var _id = pblock._id;
-  reorgBlock( name, pblock );
+  await reorgBlock( name, pblock );
 
   //. 該当ブロックの子孫が存在していたらリオルグ
   var blocks = prev_blocks[_id];
@@ -654,14 +697,14 @@ function reorgTree( name, pblock, prev_blocks ){
   }
 }
 
-function reorgBlock( name, block ){
+async function reorgBlock( name, block ){
   console.log( "reorg block: " + block._id );
   console.log( block );
   var _id = block['_id'];
   delete block['_id'];
 
   //. 自分以外で最後に追加されたブロックを特定する
-  var blocks = getBlocks( name );
+  var blocks = await getBlocks( name );
   var prev_block = null;
   if( blocks.length > 0 ){
     blocks.sort( compareByTimestampRev );
@@ -688,8 +731,8 @@ function reorgBlock( name, block ){
     block._id = nonce_hash;
 
     //. 古いブロックを消してから新しいブロックを保存する
-    if( deleteBlock( name, _id ) ){
-      saveBlock( name, block );
+    if( await deleteBlock( name, _id ) ){
+      await saveBlock( name, block );
     }
   }
 }

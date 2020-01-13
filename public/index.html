@@ -50,9 +50,42 @@ function postNewData(){
     console.log( err );
   });
 }
+
+function enc(){
+  var text = $('#decbody').val();
+  console.log( 'enc(): text = ' + text );
+  encryptBody( text ).then( function( encbody ){
+    $('#encbody').val( encbody );
+  }).catch( function( err ){
+    console.log( err );  //. Bad Request
+  });
+}
+
+function dec(){
+  var text = $('#encbody').val();
+  decryptBody( text ).then( function( decbody ){
+    $('#decbody').val( decbody );
+  });
+}
 </script>
 </head>
 <body>
+
+<div class="container">
+<table id="enc_dec_table" class="table table-bordered">
+  <thead>
+    <tr><th>body</th><th>&lt; - &gt;</th><th>enc</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><textarea id="decbody" class="form-control"></textarea></td>
+      <td><input type="button" class="btn btn-primary btn-xs" value="- encrypt ->" onClick="enc();"/>
+          </br><input type="button" class="btn btn-success btn-xs" value="<- decrypt -" onClick="dec();"/></td>
+      <td><textarea id="encbody" class="form-control" readonly></textarea></td>
+    </tr>
+  </tbody>
+</table>
+</div>
 
 <div class="container">
 <table id="ledger_table" class="table table-bordered">
