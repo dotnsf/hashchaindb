@@ -217,9 +217,8 @@ app.post( '/validate', function( req, res ){
 
 app.post( '/encrypt', function( req, res ){
   res.contentType( 'application/json; charset=utf-8' );
-  if( req.body && req.body.body && req.body.key ){
-    console.log( req.body );
-    var key = req.body.key;
+  if( req.body && req.body.body ){
+    var key = ( req.body.key ? req.body.key : settings.superSecret );
     var body = JSON.parse( JSON.stringify( req.body.body ) );
     //var encbody = jwt.sign( body, key, {} );
     hc_encrypt( body, key ).then( function( encbody ){
@@ -232,15 +231,15 @@ app.post( '/encrypt', function( req, res ){
     });
   }else{
     res.status( 400 );
-    res.write( JSON.stringify( { status: false, message: 'no body/key found in request body.' }, 2, null ) );
+    res.write( JSON.stringify( { status: false, message: 'no body found in request body.' }, 2, null ) );
     res.end();
   }
 });
 
 app.post( '/decrypt', function( req, res ){
   res.contentType( 'application/json; charset=utf-8' );
-  if( req.body && req.body.body && req.body.key ){
-    var key = req.body.key;
+  if( req.body && req.body.body ){
+    var key = ( req.body.key ? req.body.key : settings.superSecret );
     var body = req.body.body;
 
     hc_decrypt( body, key ).then( function( decbody ){
@@ -253,13 +252,11 @@ app.post( '/decrypt', function( req, res ){
     });
   }else{
     res.status( 400 );
-    res.write( JSON.stringify( { status: false, message: 'no body/key found in request body.' }, 2, null ) );
+    res.write( JSON.stringify( { status: false, message: 'no body found in request body.' }, 2, null ) );
     res.end();
   }
 });
 
-//. reorg によって不要なブロックが生じている可能性があるが、現在は無視している・・・
-//. 不要と判断されるブロックは削除すべき
 app.get( '/sync', function( req, res ){
   res.contentType( 'application/json; charset=utf-8' );
   var name = req.query.name;
@@ -273,6 +270,15 @@ app.get( '/sync', function( req, res ){
       }else{
         var result = JSON.parse( body0 );
         if( result.status ){
+          //. 現在のブロックを全削除
+          var db_dir = settings.dbs_folder + '/' + name;
+          if( fs.existsSync( db_dir ) ){
+            var files = fs.readdirSync( db_dir );
+            for( var file in files ){
+              fs.unlinkSync( db_dir + '/' + files[file] );
+            }
+          }
+          //. 改めてブロック生成
           var blocks = result.blocks;
           blocks.forEach( function( block ){
             var dir = settings.dbs_folder + '/' + name + '/' + block._id;
@@ -432,18 +438,14 @@ app.get( '/js/hashchaindb.js', function( req, res ){
     + "\n"
     + "function encryptBody( body, key ){\n"
     + "  return new Promise( ( resolve, reject ) => {\n"
-    + "console.log( 'body = ' + body );\n"
     + "    $.ajax({\n"
     + "      type: 'POST',\n"
     + "      url: '/encrypt',\n"
     + "      data: { key: key, body: body },\n"
     + "      success: function( result ){\n"
-    + "console.log( result );\n"
     + "        resolve( result );\n"
     + "      },\n"
     + "      error: function( e0, e1, e2 ){\n"
-    + "console.log( e1 );\n"
-    + "console.log( e2 );\n"
     + "        reject( e1 );\n"
     + "      }\n"
     + "    });\n"
@@ -459,8 +461,8 @@ app.get( '/js/hashchaindb.js', function( req, res ){
     + "      success: function( result ){\n"
     + "        resolve( result );\n"
     + "      },\n"
-    + "      error: function( e ){\n"
-    + "        reject( e );\n"
+    + "      error: function( e0, e1, e2 ){\n"
+    + "        reject( e1 );\n"
     + "      }\n"
     + "    });\n"
     + "  });\n"

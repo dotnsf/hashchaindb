@@ -53,18 +53,23 @@ function postNewData(){
 
 function enc(){
   var text = $('#decbody').val();
-  console.log( 'enc(): text = ' + text );
   encryptBody( text ).then( function( encbody ){
-    $('#encbody').val( encbody );
+    if( encbody && encbody.status ){
+      $('#encbody').val( encbody.body );
+    }
   }).catch( function( err ){
-    console.log( err );  //. Bad Request
+    console.log( err );
   });
 }
 
 function dec(){
   var text = $('#encbody').val();
   decryptBody( text ).then( function( decbody ){
-    $('#decbody').val( decbody );
+    if( decbody && decbody.status ){
+      $('#decbody').val( decbody.body );
+    }
+  }).catch( function( err ){
+    console.log( err );
   });
 }
 </script>
