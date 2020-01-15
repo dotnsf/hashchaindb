@@ -66,6 +66,9 @@ function dec(){
   var text = $('#encbody').val();
   decryptBody( text ).then( function( decbody ){
     if( decbody && decbody.status ){
+      if( typeof decbody.body == 'object' ){
+        decbody.body = JSON.stringify( decbody.body );
+      }
       $('#decbody').val( decbody.body );
     }
   }).catch( function( err ){

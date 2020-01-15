@@ -210,12 +210,12 @@ app.post( '/validate', function( req, res ){
     }
   }else{
     res.status( 400 );
-    res.write( JSON.stringify( { status: false, message: 'parameter name is missing to execute this API.' }, 2, null ) );
+    res.write( JSON.stringify( { status: false, message: 'parameter needs to be a block which you want to validate.' }, 2, null ) );
     res.end();
   }
 });
 
-app.post( '/encrypt', function( req, res ){
+app.post( '/encrypt', async function( req, res ){
   res.contentType( 'application/json; charset=utf-8' );
   if( req.body && req.body.body ){
     var key = ( req.body.key ? req.body.key : settings.superSecret );
@@ -236,7 +236,7 @@ app.post( '/encrypt', function( req, res ){
   }
 });
 
-app.post( '/decrypt', function( req, res ){
+app.post( '/decrypt', async function( req, res ){
   res.contentType( 'application/json; charset=utf-8' );
   if( req.body && req.body.body ){
     var key = ( req.body.key ? req.body.key : settings.superSecret );
@@ -257,7 +257,7 @@ app.post( '/decrypt', function( req, res ){
   }
 });
 
-app.get( '/sync', function( req, res ){
+app.get( '/sync', async function( req, res ){
   res.contentType( 'application/json; charset=utf-8' );
   var name = req.query.name;
   if( name ){
@@ -280,10 +280,10 @@ app.get( '/sync', function( req, res ){
           }
           //. 改めてブロック生成
           var blocks = result.blocks;
-          blocks.forEach( function( block ){
+          blocks.forEach( async function( block ){
             var dir = settings.dbs_folder + '/' + name + '/' + block._id;
             if( !fs.existsSync( dir ) ){
-              saveBlock( name, block );
+              await saveBlock( name, block );
             }
           });
           res.write( JSON.stringify( { status: true }, 2, null ) );
@@ -302,7 +302,7 @@ app.get( '/sync', function( req, res ){
   }
 });
 
-app.get( '/reorg', function( req, res ){
+app.get( '/reorg', async function( req, res ){
   res.contentType( 'application/json; charset=utf-8' );
 
   res.status( 400 );
@@ -311,8 +311,8 @@ app.get( '/reorg', function( req, res ){
 
   var name = req.params.name;
   if( name ){
-    var blocks = getBlocks( name );
-    getBlocks( name ).then( function( blocks ){
+    var blocks = await getBlocks( name );
+    await getBlocks( name ).then( function( blocks ){
       //. 競合ブロックを探す
       var conflict = false;
       var prev_blocks = {};
@@ -579,9 +579,6 @@ function countTopZero( str ){
 }
 
 async function hc_encrypt( body, key ){
-  return await async_encrypt( body, key );
-}
-function async_encrypt( body, key ){
   return new Promise( ( resolve, reject ) => {
     if( !key ){ key = settings.superSecret; }
     var encbody = jwt.sign( body, key, {} );  //. body は string or object
@@ -591,9 +588,6 @@ function async_encrypt( body, key ){
 }
 
 async function hc_decrypt( body, key ){
-  return await async_decrypt( body, key );
-}
-function async_decrypt( body, key ){
   return new Promise( ( resolve, reject ) => {
     if( !key ){ key = settings.superSecret; }
 
@@ -641,17 +635,18 @@ async function getBlocks( name ){
 }
 
 async function saveBlock( name, block ){
-  var r = false;
-  var db_dir = settings.dbs_folder + '/' + name;
-  if( fs.existsSync( db_dir ) ){
-    var json = JSON.stringify( block, null, 2 );
-    var encbody = await hc_encrypt( json );
-    fs.writeFileSync( db_dir + '/' + block._id, encbody, 'utf-8' );
-    r = true;
-  }else{
-  }
-
-  return r;
+  return new Promise( async ( resolve, reject ) => {
+    var db_dir = settings.dbs_folder + '/' + name;
+    if( fs.existsSync( db_dir ) ){
+      var json = JSON.stringify( block, null, 2 );
+      var encbody = await hc_encrypt( json );
+      fs.writeFileSync( db_dir + '/' + block._id, encbody, 'utf-8' );
+      resolve( true );
+      r = true;
+    }else{
+      reject( false );
+    }
+  });
 }
 
 async function deleteBlock( name, _id ){
