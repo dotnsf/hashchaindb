@@ -35,6 +35,7 @@ $(function(){
         + '</tr>';
       $('#ledger_table_tbody').append( tr );
     }).catch( function( err ){
+      alert( '' + err );
     });
   }).catch( function( err ){
   });
@@ -74,6 +75,38 @@ function dec(){
   }).catch( function( err ){
     console.log( err );
   });
+}
+
+function str4display( str, len ){
+  if( !len ){ len = 10; }
+  var s = '';
+  if( str ){
+    var l = str.length;
+    str = str.split( '"' ).join( '&quot;' );
+    s = '<a href="#" title="' + str + '">';
+    if( l > len ){
+      s += ( str.substr( 0, len ) + '..</a>' );
+    }else{
+      s += ( str + '</a>' );
+    }
+  }else{
+    s = '&nbsp;';
+  }
+
+  return s;
+}
+
+function timestamp2datetime( ts ){
+  var dt = new Date( ts );
+  var yyyy = dt.getFullYear();
+  var mm = dt.getMonth() + 1;
+  var dd = dt.getDate();
+  var hh = dt.getHours();
+  var nn = dt.getMinutes();
+  var ss = dt.getSeconds();
+  var datetime = yyyy + '-' + ( mm < 10 ? '0' : '' ) + mm + '-' + ( dd < 10 ? '0' : '' ) + dd
+    + ' ' + ( hh < 10 ? '0' : '' ) + hh + ':' + ( nn < 10 ? '0' : '' ) + nn + ':' + ( ss < 10 ? '0' : '' ) + ss;
+  return datetime;
 }
 </script>
 </head>
